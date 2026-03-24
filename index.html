@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Text Compare</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      padding: 20px 32px;
+      border-bottom: 1px solid #1e2330;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      color: #f8fafc;
+      letter-spacing: -0.02em;
+    }
+
+    header .badge {
+      font-size: 0.7rem;
+      background: #1e3a5f;
+      color: #60a5fa;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 500;
+    }
+
+    .inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1px;
+      background: #1e2330;
+      flex: 0 0 auto;
+    }
+
+    .input-pane {
+      background: #0f1117;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .pane-label {
+      padding: 10px 16px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #64748b;
+      border-bottom: 1px solid #1e2330;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .pane-label span.count {
+      font-weight: 400;
+      text-transform: none;
+      letter-spacing: 0;
+      color: #475569;
+    }
+
+    textarea {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #cbd5e1;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 0.82rem;
+      line-height: 1.6;
+      padding: 16px;
+      resize: none;
+      min-height: 200px;
+      height: 220px;
+    }
+
+    textarea::placeholder { color: #334155; }
+
+    .toolbar {
+      padding: 12px 32px;
+      background: #0c0e14;
+      border-top: 1px solid #1e2330;
+      border-bottom: 1px solid #1e2330;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    button#compare {
+      background: #3b82f6;
+      color: #fff;
+      border: none;
+      padding: 8px 20px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    button#compare:hover { background: #2563eb; }
+
+    .mode-group {
+      display: flex;
+      border: 1px solid #1e2330;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .mode-group button {
+      background: transparent;
+      color: #64748b;
+      border: none;
+      padding: 7px 14px;
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s;
+    }
+
+    .mode-group button.active {
+      background: #1e2330;
+      color: #e2e8f0;
+    }
+
+    .mode-group button + button { border-left: 1px solid #1e2330; }
+
+    .status {
+      margin-left: auto;
+      font-size: 0.78rem;
+      color: #475569;
+    }
+
+    .status .same { color: #22c55e; font-weight: 600; }
+    .status .diff { color: #f59e0b; font-weight: 600; }
+
+    #output {
+      flex: 1;
+      overflow: auto;
+      font-family: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+      font-size: 0.82rem;
+      line-height: 1.6;
+    }
+
+    .placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      min-height: 120px;
+      color: #2d3748;
+      font-size: 0.85rem;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    /* Unified diff view */
+    .diff-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .diff-table td {
+      padding: 1px 16px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+
+    .diff-table td.ln {
+      width: 40px;
+      min-width: 40px;
+      text-align: right;
+      padding: 1px 10px;
+      color: #3a4455;
+      user-select: none;
+      font-size: 0.75rem;
+      border-right: 1px solid #1a2030;
+    }
+
+    .diff-table td.sign {
+      width: 20px;
+      min-width: 20px;
+      padding: 1px 6px;
+      text-align: center;
+      user-select: none;
+    }
+
+    .row-add    { background: #0d2b1a; }
+    .row-add td.ln, .row-add td.sign { color: #22c55e; background: #0a2015; }
+
+    .row-remove { background: #2b0d0d; }
+    .row-remove td.ln, .row-remove td.sign { color: #ef4444; background: #200a0a; }
+
+    .row-equal  { background: transparent; }
+    .row-equal td.ln { color: #2a3244; }
+
+    /* Inline word highlights */
+    .hl-add    { background: #14532d; border-radius: 2px; padding: 0 1px; }
+    .hl-remove { background: #7f1d1d; border-radius: 2px; padding: 0 1px; }
+
+    /* Side-by-side view */
+    .side-table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    .side-table td {
+      padding: 1px 16px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      width: 50%;
+    }
+
+    .side-table td.ln {
+      width: 40px;
+      min-width: 40px;
+      text-align: right;
+      padding: 1px 10px;
+      color: #3a4455;
+      user-select: none;
+      font-size: 0.75rem;
+      border-right: 1px solid #1a2030;
+    }
+
+    .side-table .divider td {
+      border-left: 1px solid #1e2330;
+    }
+
+    .cell-add    { background: #0d2b1a; }
+    .cell-remove { background: #2b0d0d; }
+    .cell-empty  { background: #0c0e12; }
+
+    /* Same banner */
+    .same-banner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 40px;
+      color: #22c55e;
+      font-family: -apple-system, sans-serif;
+      font-size: 1rem;
+    }
+
+    .same-banner svg { opacity: 0.9; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Text Compare</h1>
+  <span class="badge">diff</span>
+</header>
+
+<div class="inputs">
+  <div class="input-pane">
+    <div class="pane-label">
+      Original
+      <span class="count" id="count-a"></span>
+    </div>
+    <textarea id="textA" placeholder="Paste original text here…" spellcheck="false"></textarea>
+  </div>
+  <div class="input-pane">
+    <div class="pane-label">
+      Modified
+      <span class="count" id="count-b"></span>
+    </div>
+    <textarea id="textB" placeholder="Paste modified text here…" spellcheck="false"></textarea>
+  </div>
+</div>
+
+<div class="toolbar">
+  <button id="compare">Compare</button>
+  <div class="mode-group">
+    <button id="mode-unified" class="active" onclick="setMode('unified')">Unified</button>
+    <button id="mode-side" onclick="setMode('side')">Side by side</button>
+  </div>
+  <div class="status" id="status"></div>
+</div>
+
+<div id="output">
+  <div class="placeholder">Enter text in both panels and click Compare</div>
+</div>
+
+<script>
+  let mode = 'unified';
+
+  function setMode(m) {
+    mode = m;
+    document.getElementById('mode-unified').classList.toggle('active', m === 'unified');
+    document.getElementById('mode-side').classList.toggle('active', m === 'side');
+    // Re-run if we already have a result
+    const out = document.getElementById('output');
+    if (!out.querySelector('.placeholder')) runCompare();
+  }
+
+  // Update character/line counts
+  ['textA', 'textB'].forEach((id, i) => {
+    const ta = document.getElementById(id);
+    const counter = document.getElementById(i === 0 ? 'count-a' : 'count-b');
+    ta.addEventListener('input', () => {
+      const lines = ta.value ? ta.value.split('\n').length : 0;
+      const chars = ta.value.length;
+      counter.textContent = chars ? `${lines} lines · ${chars} chars` : '';
+    });
+  });
+
+  document.getElementById('compare').addEventListener('click', runCompare);
+
+  // Also compare on Ctrl/Cmd+Enter
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') runCompare();
+  });
+
+  function runCompare() {
+    const a = document.getElementById('textA').value;
+    const b = document.getElementById('textB').value;
+
+    if (!a && !b) {
+      document.getElementById('output').innerHTML = '<div class="placeholder">Enter text in both panels and click Compare</div>';
+      document.getElementById('status').innerHTML = '';
+      return;
+    }
+
+    const linesA = a.split('\n');
+    const linesB = b.split('\n');
+
+    const ops = diffLines(linesA, linesB);
+
+    const changed = ops.some(op => op.type !== 'equal');
+    const added   = ops.filter(op => op.type === 'add').reduce((n, op) => n + op.lines.length, 0);
+    const removed = ops.filter(op => op.type === 'remove').reduce((n, op) => n + op.lines.length, 0);
+
+    const status = document.getElementById('status');
+    if (!changed) {
+      status.innerHTML = '<span class="same">✓ Identical</span>';
+    } else {
+      status.innerHTML = `<span class="diff">+${added} / -${removed} lines changed</span>`;
+    }
+
+    if (!changed) {
+      document.getElementById('output').innerHTML = `
+        <div class="same-banner">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M4 10l4 4 8-8"/>
+          </svg>
+          The texts are identical.
+        </div>`;
+      return;
+    }
+
+    if (mode === 'unified') renderUnified(ops);
+    else renderSide(linesA, linesB, ops);
+  }
+
+  // ── LCS-based line diff ──────────────────────────────────────────────────
+
+  function diffLines(a, b) {
+    const m = a.length, n = b.length;
+    // Build LCS table
+    const dp = Array.from({length: m + 1}, () => new Uint32Array(n + 1));
+    for (let i = m - 1; i >= 0; i--)
+      for (let j = n - 1; j >= 0; j--)
+        dp[i][j] = a[i] === b[j] ? dp[i+1][j+1] + 1 : Math.max(dp[i+1][j], dp[i][j+1]);
+
+    const ops = [];
+    let i = 0, j = 0;
+    while (i < m || j < n) {
+      if (i < m && j < n && a[i] === b[j]) {
+        push(ops, 'equal', a[i]); i++; j++;
+      } else if (j < n && (i >= m || dp[i][j+1] >= dp[i+1][j])) {
+        push(ops, 'add', b[j]); j++;
+      } else {
+        push(ops, 'remove', a[i]); i++;
+      }
+    }
+    return ops;
+  }
+
+  function push(ops, type, line) {
+    if (ops.length && ops[ops.length-1].type === type)
+      ops[ops.length-1].lines.push(line);
+    else
+      ops.push({type, lines: [line]});
+  }
+
+  // ── Word-level diff for changed lines ───────────────────────────────────
+
+  function diffWords(a, b) {
+    const tokA = tokenize(a), tokB = tokenize(b);
+    const m = tokA.length, n = tokB.length;
+    const dp = Array.from({length: m+1}, () => new Uint16Array(n+1));
+    for (let i = m-1; i >= 0; i--)
+      for (let j = n-1; j >= 0; j--)
+        dp[i][j] = tokA[i] === tokB[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+    let html = '', i = 0, j = 0;
+    while (i < m || j < n) {
+      if (i < m && j < n && tokA[i] === tokB[j]) {
+        html += esc(tokA[i]); i++; j++;
+      } else if (j < n && (i >= m || dp[i][j+1] >= dp[i+1][j])) {
+        html += `<span class="hl-add">${esc(tokB[j])}</span>`; j++;
+      } else {
+        html += `<span class="hl-remove">${esc(tokA[i])}</span>`; i++;
+      }
+    }
+    return html;
+  }
+
+  function tokenize(s) {
+    return s.split(/(\s+)/).filter(t => t.length);
+  }
+
+  function esc(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  // ── Unified render ───────────────────────────────────────────────────────
+
+  function renderUnified(ops) {
+    // Pair up remove/add blocks for word-level diff
+    let rows = '';
+    let lnA = 1, lnB = 1;
+
+    // Flatten ops but pair adjacent remove+add for word diff
+    const flat = [];
+    for (let k = 0; k < ops.length; k++) {
+      const op = ops[k];
+      if (op.type === 'remove' && k+1 < ops.length && ops[k+1].type === 'add') {
+        flat.push({type: 'change', remove: op.lines, add: ops[k+1].lines});
+        k++;
+      } else {
+        flat.push(op);
+      }
+    }
+
+    for (const op of flat) {
+      if (op.type === 'equal') {
+        for (const line of op.lines) {
+          rows += `<tr class="row-equal"><td class="ln">${lnA++}</td><td class="ln">${lnB++}</td><td class="sign"> </td><td>${esc(line)}</td></tr>`;
+        }
+      } else if (op.type === 'change') {
+        const maxLen = Math.max(op.remove.length, op.add.length);
+        for (let i = 0; i < maxLen; i++) {
+          const ra = op.remove[i], rb = op.add[i];
+          if (ra !== undefined && rb !== undefined) {
+            // Word diff
+            const removeHtml = diffWordsRemove(ra, rb);
+            const addHtml    = diffWordsAdd(ra, rb);
+            rows += `<tr class="row-remove"><td class="ln">${lnA++}</td><td class="ln"> </td><td class="sign">−</td><td>${removeHtml}</td></tr>`;
+            rows += `<tr class="row-add"><td class="ln"> </td><td class="ln">${lnB++}</td><td class="sign">+</td><td>${addHtml}</td></tr>`;
+          } else if (ra !== undefined) {
+            rows += `<tr class="row-remove"><td class="ln">${lnA++}</td><td class="ln"> </td><td class="sign">−</td><td>${esc(ra)}</td></tr>`;
+          } else {
+            rows += `<tr class="row-add"><td class="ln"> </td><td class="ln">${lnB++}</td><td class="sign">+</td><td>${esc(rb)}</td></tr>`;
+          }
+        }
+      } else if (op.type === 'remove') {
+        for (const line of op.lines)
+          rows += `<tr class="row-remove"><td class="ln">${lnA++}</td><td class="ln"> </td><td class="sign">−</td><td>${esc(line)}</td></tr>`;
+      } else if (op.type === 'add') {
+        for (const line of op.lines)
+          rows += `<tr class="row-add"><td class="ln"> </td><td class="ln">${lnB++}</td><td class="sign">+</td><td>${esc(line)}</td></tr>`;
+      }
+    }
+
+    document.getElementById('output').innerHTML = `<table class="diff-table">${rows}</table>`;
+  }
+
+  function diffWordsRemove(a, b) {
+    const tokA = tokenize(a), tokB = tokenize(b);
+    const m = tokA.length, n = tokB.length;
+    const dp = Array.from({length: m+1}, () => new Uint16Array(n+1));
+    for (let i = m-1; i >= 0; i--)
+      for (let j = n-1; j >= 0; j--)
+        dp[i][j] = tokA[i] === tokB[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+    let html = '', i = 0, j = 0;
+    while (i < m || j < n) {
+      if (i < m && j < n && tokA[i] === tokB[j]) { html += esc(tokA[i]); i++; j++; }
+      else if (j < n && (i >= m || dp[i][j+1] >= dp[i+1][j])) { j++; }
+      else { html += `<span class="hl-remove">${esc(tokA[i])}</span>`; i++; }
+    }
+    return html;
+  }
+
+  function diffWordsAdd(a, b) {
+    const tokA = tokenize(a), tokB = tokenize(b);
+    const m = tokA.length, n = tokB.length;
+    const dp = Array.from({length: m+1}, () => new Uint16Array(n+1));
+    for (let i = m-1; i >= 0; i--)
+      for (let j = n-1; j >= 0; j--)
+        dp[i][j] = tokA[i] === tokB[j] ? dp[i+1][j+1]+1 : Math.max(dp[i+1][j], dp[i][j+1]);
+    let html = '', i = 0, j = 0;
+    while (i < m || j < n) {
+      if (i < m && j < n && tokA[i] === tokB[j]) { html += esc(tokA[i]); i++; j++; }
+      else if (j < n && (i >= m || dp[i][j+1] >= dp[i+1][j])) { html += `<span class="hl-add">${esc(tokB[j])}</span>`; j++; }
+      else { i++; }
+    }
+    return html;
+  }
+
+  // ── Side-by-side render ──────────────────────────────────────────────────
+
+  function renderSide(linesA, linesB, ops) {
+    // Align lines: equal → same row, add/remove → split rows
+    const pairs = [];
+    for (let k = 0; k < ops.length; k++) {
+      const op = ops[k];
+      if (op.type === 'equal') {
+        for (const line of op.lines) pairs.push({left: line, right: line, type: 'equal'});
+      } else if (op.type === 'remove' && k+1 < ops.length && ops[k+1].type === 'add') {
+        const rem = op.lines, add = ops[k+1].lines;
+        const maxLen = Math.max(rem.length, add.length);
+        for (let i = 0; i < maxLen; i++)
+          pairs.push({left: rem[i], right: add[i], type: 'change'});
+        k++;
+      } else if (op.type === 'remove') {
+        for (const line of op.lines) pairs.push({left: line, right: undefined, type: 'remove'});
+      } else {
+        for (const line of op.lines) pairs.push({left: undefined, right: line, type: 'add'});
+      }
+    }
+
+    let lnA = 1, lnB = 1, rows = '';
+    for (const p of pairs) {
+      if (p.type === 'equal') {
+        rows += `<tr>
+          <td class="ln">${lnA++}</td><td>${esc(p.left)}</td>
+          <td class="ln">${lnB++}</td><td>${esc(p.right)}</td>
+        </tr>`;
+      } else if (p.type === 'change') {
+        const lh = p.left  !== undefined ? diffWordsRemove(p.left,  p.right ?? '') : '';
+        const rh = p.right !== undefined ? diffWordsAdd(p.left ?? '', p.right)     : '';
+        const leftLn  = p.left  !== undefined ? lnA++ : ' ';
+        const rightLn = p.right !== undefined ? lnB++ : ' ';
+        rows += `<tr>
+          <td class="ln">${leftLn}</td><td class="cell-remove">${p.left  !== undefined ? lh : ''}</td>
+          <td class="ln">${rightLn}</td><td class="cell-add">${p.right !== undefined ? rh : ''}</td>
+        </tr>`;
+      } else if (p.type === 'remove') {
+        rows += `<tr>
+          <td class="ln">${lnA++}</td><td class="cell-remove">${esc(p.left)}</td>
+          <td class="ln"> </td><td class="cell-empty"></td>
+        </tr>`;
+      } else {
+        rows += `<tr>
+          <td class="ln"> </td><td class="cell-empty"></td>
+          <td class="ln">${lnB++}</td><td class="cell-add">${esc(p.right)}</td>
+        </tr>`;
+      }
+    }
+
+    document.getElementById('output').innerHTML = `<table class="side-table">${rows}</table>`;
+  }
+</script>
+</body>
+</html>
